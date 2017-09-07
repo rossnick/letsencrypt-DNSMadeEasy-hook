@@ -90,10 +90,27 @@ def _has_dns_propagated(name, token):
 def _get_zone_id(domain):
     # allow both tlds and subdomains hosted on DNSMadeEasy
     tld = domain[domain.find('.')+1:]
-    url = DME_API_BASE_URL[DME_SERVER] + "/id/{0}".format(tld)
+    url = DME_API_BASE_URL[DME_SERVER]
     r = requests.get(url, headers=DME_HEADERS)
     r.raise_for_status()
-    return r.json()['id']
+    for record in r.json()['data']:
+        if (record['name'] == tld) or ("." + record['name'] in tld):
+            return record['id']
+    logger.error(" + Unable to locate zone for {0}".format(tld))
+    sys.exit(1)
+
+# http://api.dnsmadeeasy.com/V2.0/dns/managed/id/{domainname}
+def _get_zone_name(domain):
+    # allow both tlds and subdomains hosted on DNSMadeEasy
+    tld = domain[domain.find('.')+1:]
+    url = DME_API_BASE_URL[DME_SERVER]
+    r = requests.get(url, headers=DME_HEADERS)
+    r.raise_for_status()
+    for record in r.json()['data']:
+        if (record['name'] == tld) or ("." + record['name'] in tld):
+            return record['name']
+    logger.error(" + Unable to locate zone for {0}".format(tld))
+    sys.exit(1)
 
 
 # http://api.dnsmadeeasy.com/V2.0/dns/managed/{domain_id}}/records?type=TXT&recordName={name}
@@ -115,7 +132,7 @@ def create_txt_record(args):
     domain, token = args[0], args[2]
     zone_id = _get_zone_id(domain)
     name = "{0}.{1}".format('_acme-challenge', domain)
-    short_name = "{0}.{1}".format('_acme-challenge', domain[0:domain.find('.')])
+    short_name = "{0}.{1}".format('_acme-challenge', domain[0:-(len(_get_zone_name(domain))+1)])
     url = DME_API_BASE_URL[DME_SERVER] + "/{0}/records".format(zone_id)
     payload = {
         'type': 'TXT',
@@ -151,7 +168,7 @@ def delete_txt_record(args):
 
     zone_id = _get_zone_id(domain)
     name = "{0}.{1}".format('_acme-challenge', domain)
-    short_name = "{0}.{1}".format('_acme-challenge', domain[0:domain.find('.')])
+    short_name = "{0}.{1}".format('_acme-challenge', domain[0:-(len(_get_zone_name(domain))+1)])
     record_id = _get_txt_record_id(zone_id, short_name)
 
     logger.debug(" + Deleting TXT record name: {0}".format(name))
