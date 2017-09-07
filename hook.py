@@ -49,6 +49,11 @@ except KeyError:
     logger.error(" + Unable to locate dnsmadeeasy credentials in environment!")
     sys.exit(1)
 
+try:
+     DME_SERVER=os.environ['DME_SERVER']
+except:
+     DME_SERVER='production'
+
 DME_API_BASE_URL = {
     'production': 'https://api.dnsmadeeasy.com/V2.0/dns/managed',
     'staging': 'http://api.sandbox.dnsmadeeasy.com/V2.0/dns/managed'
@@ -85,7 +90,7 @@ def _has_dns_propagated(name, token):
 def _get_zone_id(domain):
     # allow both tlds and subdomains hosted on DNSMadeEasy
     tld = domain[domain.find('.')+1:]
-    url = DME_API_BASE_URL['production'] + "/id/{0}".format(tld)
+    url = DME_API_BASE_URL[DME_SERVER] + "/id/{0}".format(tld)
     r = requests.get(url, headers=DME_HEADERS)
     r.raise_for_status()
     return r.json()['id']
@@ -93,7 +98,7 @@ def _get_zone_id(domain):
 
 # http://api.dnsmadeeasy.com/V2.0/dns/managed/{domain_id}}/records?type=TXT&recordName={name}
 def _get_txt_record_id(zone_id, name):
-    url = DME_API_BASE_URL['production'] + "/{0}/records?type=TXT&recordName={1}".format(zone_id, name)
+    url = DME_API_BASE_URL[DME_SERVER] + "/{0}/records?type=TXT&recordName={1}".format(zone_id, name)
     r = requests.get(url, headers=DME_HEADERS)
     r.raise_for_status()
     try:
@@ -111,7 +116,7 @@ def create_txt_record(args):
     zone_id = _get_zone_id(domain)
     name = "{0}.{1}".format('_acme-challenge', domain)
     short_name = "{0}.{1}".format('_acme-challenge', domain[0:domain.find('.')])
-    url = DME_API_BASE_URL['production'] + "/{0}/records".format(zone_id)
+    url = DME_API_BASE_URL[DME_SERVER] + "/{0}/records".format(zone_id)
     payload = {
         'type': 'TXT',
         'name': short_name,
@@ -150,7 +155,7 @@ def delete_txt_record(args):
     record_id = _get_txt_record_id(zone_id, short_name)
 
     logger.debug(" + Deleting TXT record name: {0}".format(name))
-    url = DME_API_BASE_URL['production'] + "/{0}/records/{1}".format(zone_id, record_id)
+    url = DME_API_BASE_URL[DME_SERVER] + "/{0}/records/{1}".format(zone_id, record_id)
     r = requests.delete(url, headers=DME_HEADERS)
     r.raise_for_status()
 
