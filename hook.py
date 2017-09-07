@@ -113,7 +113,7 @@ def _get_zone_name(domain):
     sys.exit(1)
 
 
-# http://api.dnsmadeeasy.com/V2.0/dns/managed/{domain_id}}/records?type=TXT&recordName={name}
+# http://api.dnsmadeeasy.com/V2.0/dns/managed/{domain_id}/records?type=TXT&recordName={name}
 def _get_txt_record_id(zone_id, name):
     url = DME_API_BASE_URL[DME_SERVER] + "/{0}/records?type=TXT&recordName={1}".format(zone_id, name)
     r = requests.get(url, headers=DME_HEADERS)
@@ -127,7 +127,7 @@ def _get_txt_record_id(zone_id, name):
     return record_id
 
 
-# http://api.dnsmadeeasy.com/V2.0/dns/managed/{domain_id}}/records
+# http://api.dnsmadeeasy.com/V2.0/dns/managed/{domain_id}/records
 def create_txt_record(args):
     domain, token = args[0], args[2]
     zone_id = _get_zone_id(domain)
@@ -143,7 +143,7 @@ def create_txt_record(args):
     r = requests.post(url, headers=DME_HEADERS, json=payload)
     r.raise_for_status()
     record_id = r.json()['id']
-    logger.debug("+ TXT record created, ID: {0}".format(record_id))
+    logger.debug(" + TXT record created, ID: {0}".format(record_id))
 
     # give it 10 seconds to settle down and avoid nxdomain caching
     logger.info(" + Settling down for 10s...")
@@ -159,7 +159,7 @@ def create_txt_record(args):
         logger.error("Error resolving TXT record in domain {0}".format(domain))
         sys.exit(1)
 
-# http://api.dnsmadeeasy.com/V2.0/dns/managed/{domain_id}}/records
+# http://api.dnsmadeeasy.com/V2.0/dns/managed/{domain_id}/records
 def delete_txt_record(args):
     domain, token = args[0], args[2]
     if not domain:
