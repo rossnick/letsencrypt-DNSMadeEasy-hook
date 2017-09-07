@@ -69,7 +69,7 @@ def _has_dns_propagated(name, token):
     txt_records = []
     try:
         if dns_servers:
-            custom_resolver = dns.resolver.Resolver()
+            custom_resolver = dns.resolver.Resolver(configure=False)
             custom_resolver.nameservers = dns_servers
             dns_response = custom_resolver.query(name, 'TXT')
         else:
