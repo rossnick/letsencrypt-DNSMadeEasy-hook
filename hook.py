@@ -49,6 +49,11 @@ except KeyError:
     logger.error(" + Unable to locate dnsmadeeasy credentials in environment!")
     sys.exit(1)
 
+try:
+     DME_SERVER=os.environ['DME_SERVER']
+except:
+     DME_SERVER='production'
+
 DME_API_BASE_URL = {
     'production': 'https://api.dnsmadeeasy.com/V2.0/dns/managed',
     'staging': 'http://api.sandbox.dnsmadeeasy.com/V2.0/dns/managed'
@@ -64,7 +69,7 @@ def _has_dns_propagated(name, token):
     txt_records = []
     try:
         if dns_servers:
-            custom_resolver = dns.resolver.Resolver()
+            custom_resolver = dns.resolver.Resolver(configure=False)
             custom_resolver.nameservers = dns_servers
             dns_response = custom_resolver.query(name, 'TXT')
         else:
@@ -85,15 +90,32 @@ def _has_dns_propagated(name, token):
 def _get_zone_id(domain):
     # allow both tlds and subdomains hosted on DNSMadeEasy
     tld = domain[domain.find('.')+1:]
-    url = DME_API_BASE_URL['production'] + "/id/{0}".format(tld)
+    url = DME_API_BASE_URL[DME_SERVER]
     r = requests.get(url, headers=DME_HEADERS)
     r.raise_for_status()
-    return r.json()['id']
+    for record in r.json()['data']:
+        if (record['name'] == tld) or ("." + record['name'] in tld):
+            return record['id']
+    logger.error(" + Unable to locate zone for {0}".format(tld))
+    sys.exit(1)
+
+# http://api.dnsmadeeasy.com/V2.0/dns/managed/id/{domainname}
+def _get_zone_name(domain):
+    # allow both tlds and subdomains hosted on DNSMadeEasy
+    tld = domain[domain.find('.')+1:]
+    url = DME_API_BASE_URL[DME_SERVER]
+    r = requests.get(url, headers=DME_HEADERS)
+    r.raise_for_status()
+    for record in r.json()['data']:
+        if (record['name'] == tld) or ("." + record['name'] in tld):
+            return record['name']
+    logger.error(" + Unable to locate zone for {0}".format(tld))
+    sys.exit(1)
 
 
-# http://api.dnsmadeeasy.com/V2.0/dns/managed/{domain_id}}/records?type=TXT&recordName={name}
+# http://api.dnsmadeeasy.com/V2.0/dns/managed/{domain_id}/records?type=TXT&recordName={name}
 def _get_txt_record_id(zone_id, name):
-    url = DME_API_BASE_URL['production'] + "/{0}/records?type=TXT&recordName={1}".format(zone_id, name)
+    url = DME_API_BASE_URL[DME_SERVER] + "/{0}/records?type=TXT&recordName={1}".format(zone_id, name)
     r = requests.get(url, headers=DME_HEADERS)
     r.raise_for_status()
     try:
@@ -105,13 +127,13 @@ def _get_txt_record_id(zone_id, name):
     return record_id
 
 
-# http://api.dnsmadeeasy.com/V2.0/dns/managed/{domain_id}}/records
+# http://api.dnsmadeeasy.com/V2.0/dns/managed/{domain_id}/records
 def create_txt_record(args):
     domain, token = args[0], args[2]
     zone_id = _get_zone_id(domain)
     name = "{0}.{1}".format('_acme-challenge', domain)
-    short_name = "{0}.{1}".format('_acme-challenge', domain[0:domain.find('.')])
-    url = DME_API_BASE_URL['production'] + "/{0}/records".format(zone_id)
+    short_name = "{0}.{1}".format('_acme-challenge', domain[0:-(len(_get_zone_name(domain))+1)])
+    url = DME_API_BASE_URL[DME_SERVER] + "/{0}/records".format(zone_id)
     payload = {
         'type': 'TXT',
         'name': short_name,
@@ -121,7 +143,7 @@ def create_txt_record(args):
     r = requests.post(url, headers=DME_HEADERS, json=payload)
     r.raise_for_status()
     record_id = r.json()['id']
-    logger.debug("+ TXT record created, ID: {0}".format(record_id))
+    logger.debug(" + TXT record created, ID: {0}".format(record_id))
 
     # give it 10 seconds to settle down and avoid nxdomain caching
     logger.info(" + Settling down for 10s...")
@@ -137,7 +159,7 @@ def create_txt_record(args):
         logger.error("Error resolving TXT record in domain {0}".format(domain))
         sys.exit(1)
 
-# http://api.dnsmadeeasy.com/V2.0/dns/managed/{domain_id}}/records
+# http://api.dnsmadeeasy.com/V2.0/dns/managed/{domain_id}/records
 def delete_txt_record(args):
     domain, token = args[0], args[2]
     if not domain:
@@ -146,11 +168,11 @@ def delete_txt_record(args):
 
     zone_id = _get_zone_id(domain)
     name = "{0}.{1}".format('_acme-challenge', domain)
-    short_name = "{0}.{1}".format('_acme-challenge', domain[0:domain.find('.')])
+    short_name = "{0}.{1}".format('_acme-challenge', domain[0:-(len(_get_zone_name(domain))+1)])
     record_id = _get_txt_record_id(zone_id, short_name)
 
     logger.debug(" + Deleting TXT record name: {0}".format(name))
-    url = DME_API_BASE_URL['production'] + "/{0}/records/{1}".format(zone_id, record_id)
+    url = DME_API_BASE_URL[DME_SERVER] + "/{0}/records/{1}".format(zone_id, record_id)
     r = requests.delete(url, headers=DME_HEADERS)
     r.raise_for_status()
 
