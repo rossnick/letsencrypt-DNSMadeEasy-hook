@@ -76,7 +76,12 @@ def _has_dns_propagated(name, token):
             dns_response = dns.resolver.query(name, 'TXT')
         for rdata in dns_response:
             for txt_record in rdata.strings:
-                txt_records.append(txt_record.decode())
+                try:
+                    txt_record = txt_record.decode()
+                except AttributeError:
+                    txt_record = bytearray(txt_record, 'ascii')
+                    pass
+                txt_records.append(txt_record)
     except dns.exception.DNSException as error:
         return False
 
@@ -89,7 +94,10 @@ def _has_dns_propagated(name, token):
 # http://api.dnsmadeeasy.com/V2.0/dns/managed/id/{domainname}
 def _get_zone_id(domain):
     # allow both tlds and subdomains hosted on DNSMadeEasy
-    tld = domain[domain.find('.')+1:]
+    if (domain.count('.') > 1):
+        tld = domain[domain.find('.')+1:]
+    else:
+        tld = domain
     url = DME_API_BASE_URL[DME_SERVER]
     r = requests.get(url, headers=DME_HEADERS)
     r.raise_for_status()
@@ -102,7 +110,10 @@ def _get_zone_id(domain):
 # http://api.dnsmadeeasy.com/V2.0/dns/managed/id/{domainname}
 def _get_zone_name(domain):
     # allow both tlds and subdomains hosted on DNSMadeEasy
-    tld = domain[domain.find('.')+1:]
+    if (domain.count('.') > 1):
+        tld = domain[domain.find('.')+1:]
+    else:
+        tld = domain
     url = DME_API_BASE_URL[DME_SERVER]
     r = requests.get(url, headers=DME_HEADERS)
     r.raise_for_status()
@@ -132,7 +143,9 @@ def create_txt_record(args):
     domain, token = args[0], args[2]
     zone_id = _get_zone_id(domain)
     name = "{0}.{1}".format('_acme-challenge', domain)
-    short_name = "{0}.{1}".format('_acme-challenge', domain[0:-(len(_get_zone_name(domain))+1)])
+    short_name = '_acme-challenge'
+    if (domain.count('.') > 1):
+        short_name = "{0}.{1}".format('_acme-challenge', domain[0:-(len(_get_zone_name(domain))+1)])
     url = DME_API_BASE_URL[DME_SERVER] + "/{0}/records".format(zone_id)
     payload = {
         'type': 'TXT',
@@ -168,7 +181,9 @@ def delete_txt_record(args):
 
     zone_id = _get_zone_id(domain)
     name = "{0}.{1}".format('_acme-challenge', domain)
-    short_name = "{0}.{1}".format('_acme-challenge', domain[0:-(len(_get_zone_name(domain))+1)])
+    short_name = '_acme-challenge'
+    if (domain.count('.') > 1):
+        short_name = "{0}.{1}".format('_acme-challenge', domain[0:-(len(_get_zone_name(domain))+1)])
     record_id = _get_txt_record_id(zone_id, short_name)
 
     logger.debug(" + Deleting TXT record name: {0}".format(name))
