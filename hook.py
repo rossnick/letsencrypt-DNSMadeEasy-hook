@@ -71,9 +71,9 @@ def _has_dns_propagated(name, token):
         if dns_servers:
             custom_resolver = dns.resolver.Resolver(configure=False)
             custom_resolver.nameservers = dns_servers
-            dns_response = custom_resolver.query(name, 'TXT')
+            dns_response = custom_resolver.resolve(name, 'TXT')
         else:
-            dns_response = dns.resolver.query(name, 'TXT')
+            dns_response = dns.resolver.resolve(name, 'TXT')
         for rdata in dns_response:
             for txt_record in rdata.strings:
                 try:
@@ -86,7 +86,7 @@ def _has_dns_propagated(name, token):
         return False
 
     for txt_record in txt_records:
-        if txt_record == bytearray(token, 'ascii'):
+        if txt_record == bytearray(token, 'ascii').decode():
             return True
 
     return False
