@@ -154,6 +154,10 @@ def create_txt_record(args):
         'ttl': 5,
     }
     r = requests.post(url, headers=DME_HEADERS, json=payload)
+
+    if r.status_code != 200:
+      pprint(r.text)
+
     r.raise_for_status()
     record_id = r.json()['id']
     logger.debug(" + TXT record created, ID: {0}".format(record_id))
