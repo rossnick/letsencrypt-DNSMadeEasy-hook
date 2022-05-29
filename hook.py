@@ -71,9 +71,9 @@ def _has_dns_propagated(name, token):
         if dns_servers:
             custom_resolver = dns.resolver.Resolver(configure=False)
             custom_resolver.nameservers = dns_servers
-            dns_response = custom_resolver.query(name, 'TXT')
+            dns_response = custom_resolver.resolve(name, 'TXT')
         else:
-            dns_response = dns.resolver.query(name, 'TXT')
+            dns_response = dns.resolver.resolve(name, 'TXT')
         for rdata in dns_response:
             for txt_record in rdata.strings:
                 try:
@@ -86,7 +86,7 @@ def _has_dns_propagated(name, token):
         return False
 
     for txt_record in txt_records:
-        if txt_record == bytearray(token, 'ascii'):
+        if txt_record == bytearray(token, 'ascii').decode():
             return True
 
     return False
@@ -154,6 +154,10 @@ def create_txt_record(args):
         'ttl': 5,
     }
     r = requests.post(url, headers=DME_HEADERS, json=payload)
+
+    if r.status_code != 200:
+      pprint(r.text)
+
     r.raise_for_status()
     record_id = r.json()['id']
     logger.debug(" + TXT record created, ID: {0}".format(record_id))
