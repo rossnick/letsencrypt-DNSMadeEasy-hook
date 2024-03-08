@@ -65,6 +65,27 @@ try:
 except KeyError:
     dns_servers = False
 
+def make_request_with_retries(method, url, headers, data=None, max_retries=3, backoff_factor=2):
+    for attempt in range(max_retries):
+        try:
+            if method.lower() == 'get':
+                response = requests.get(url, headers=headers)
+            elif method.lower() == 'post':
+                response = requests.post(url, headers=headers, json=data)
+            else:
+                raise ValueError("Unsupported method: {}".format(method))
+
+            response.raise_for_status()
+            return response
+        except requests.exceptions.RequestException as e:  # This catches more than just HTTPError
+            if attempt < max_retries - 1:
+                wait_time = backoff_factor ** attempt
+                logger.warning(f"Request failed, retrying in {wait_time} seconds... (Attempt {attempt + 1}/{max_retries})")
+                time.sleep(wait_time)
+            else:
+                logger.error(f"Failed to get a successful response after {max_retries} attempts")
+                raise
+
 def _has_dns_propagated(name, token):
     txt_records = []
     try:
@@ -99,9 +120,8 @@ def _get_zone_id(domain):
     else:
         tld = domain
     url = DME_API_BASE_URL[DME_SERVER]
-    r = requests.get(url, headers=DME_HEADERS)
-    r.raise_for_status()
-    for record in r.json()['data']:
+    response = make_request_with_retries('get', url, headers=DME_HEADERS)
+    for record in response.json()['data']:
         if (record['name'] == tld) or ("." + record['name'] in tld):
             return record['id']
     logger.error(" + Unable to locate zone for {0}".format(tld))
@@ -115,9 +135,8 @@ def _get_zone_name(domain):
     else:
         tld = domain
     url = DME_API_BASE_URL[DME_SERVER]
-    r = requests.get(url, headers=DME_HEADERS)
-    r.raise_for_status()
-    for record in r.json()['data']:
+    response = make_request_with_retries('get', url, headers=DME_HEADERS)
+    for record in response.json()['data']:
         if (record['name'] == tld) or ("." + record['name'] in tld):
             return record['name']
     logger.error(" + Unable to locate zone for {0}".format(tld))
@@ -127,10 +146,9 @@ def _get_zone_name(domain):
 # http://api.dnsmadeeasy.com/V2.0/dns/managed/{domain_id}/records?type=TXT&recordName={name}
 def _get_txt_record_id(zone_id, name):
     url = DME_API_BASE_URL[DME_SERVER] + "/{0}/records?type=TXT&recordName={1}".format(zone_id, name)
-    r = requests.get(url, headers=DME_HEADERS)
-    r.raise_for_status()
+    response = make_request_with_retries('get', url, headers=DME_HEADERS)
     try:
-        record_id = r.json()['data'][0]['id']
+        record_id = response.json()['data'][0]['id']
     except IndexError:
         logger.info(" + Unable to locate record named {0}".format(name))
         return
@@ -153,13 +171,12 @@ def create_txt_record(args):
         'value': token,
         'ttl': 5,
     }
-    r = requests.post(url, headers=DME_HEADERS, json=payload)
+    response = make_request_with_retries('post', url, headers=DME_HEADERS, data=payload)
 
-    if r.status_code != 200:
+    if response.status_code != 200:
       pprint(r.text)
 
-    r.raise_for_status()
-    record_id = r.json()['id']
+    record_id = response.json()['id']
     logger.debug(" + TXT record created, ID: {0}".format(record_id))
 
     # give it 10 seconds to settle down and avoid nxdomain caching
