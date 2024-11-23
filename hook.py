@@ -174,7 +174,7 @@ def create_txt_record(args):
     response = make_request_with_retries('post', url, headers=DME_HEADERS, data=payload)
 
     if response.status_code != 200:
-      pprint(r.text)
+      print(response.text)
 
     record_id = response.json()['id']
     logger.debug(" + TXT record created, ID: {0}".format(record_id))
