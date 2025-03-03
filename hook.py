@@ -158,59 +158,63 @@ def _get_txt_record_id(zone_id, name):
 
 # http://api.dnsmadeeasy.com/V2.0/dns/managed/{domain_id}/records
 def create_txt_record(args):
-    domain, token = args[0], args[2]
-    zone_id = _get_zone_id(domain)
-    name = "{0}.{1}".format('_acme-challenge', domain)
-    short_name = '_acme-challenge'
-    if (domain.count('.') > 1):
-        short_name = "{0}.{1}".format('_acme-challenge', domain[0:-(len(_get_zone_name(domain))+1)])
-    url = DME_API_BASE_URL[DME_SERVER] + "/{0}/records".format(zone_id)
-    payload = {
-        'type': 'TXT',
-        'name': short_name,
-        'value': token,
-        'ttl': 5,
-    }
-    response = make_request_with_retries('post', url, headers=DME_HEADERS, data=payload)
+    for i in range(0, len(args), 3):
+        domain, token = args[i], args[i+2]
+        zone_id = _get_zone_id(domain)
+        name = "{0}.{1}".format('_acme-challenge', domain)
+        short_name = '_acme-challenge'
+        if (domain.count('.') > 1):
+            short_name = "{0}.{1}".format('_acme-challenge', domain[0:-(len(_get_zone_name(domain))+1)])
+        url = DME_API_BASE_URL[DME_SERVER] + "/{0}/records".format(zone_id)
+        payload = {
+            'type': 'TXT',
+            'name': short_name,
+            'value': token,
+            'ttl': 5,
+        }
+        response = make_request_with_retries('post', url, headers=DME_HEADERS, data=payload)
 
-    if response.status_code != 200:
-      print(response.text)
+        if response.status_code != 200:
+            print(response.text)
 
-    record_id = response.json()['id']
-    logger.debug(" + TXT record created, ID: {0}".format(record_id))
+        record_id = response.json()['id']
+        logger.debug(" + TXT record created, ID: {0}".format(record_id))
 
-    # give it 30 seconds to settle down and avoid nxdomain caching
-    logger.info(" + Settling down for 10s...")
+        # give it 30 seconds to settle down and avoid nxdomain caching
+        logger.info(" + Settling down for 5s...")
+        time.sleep(5)
+
+        retries=2
+        while(_has_dns_propagated(name, token) == False and retries > 0):
+            logger.info(" + DNS not propagated, waiting 15s...")
+            retries-=1
+            time.sleep(15)
+
+        if retries <= 0:
+            logger.error("Error resolving TXT record in domain {0}".format(domain))
+            sys.exit(1)
+    logger.info(" + Waiting a final 30s...")
     time.sleep(30)
-
-    retries=2
-    while(_has_dns_propagated(name, token) == False and retries > 0):
-        logger.info(" + DNS not propagated, waiting 30s...")
-        retries-=1
-        time.sleep(30)
-
-    if retries <= 0:
-        logger.error("Error resolving TXT record in domain {0}".format(domain))
-        sys.exit(1)
 
 # http://api.dnsmadeeasy.com/V2.0/dns/managed/{domain_id}/records
 def delete_txt_record(args):
-    domain, token = args[0], args[2]
-    if not domain:
-        logger.info(" + http_request() error in letsencrypt.sh?")
-        return
+    for i in range(0, len(args), 3):
+        domain, token = args[i], args[i+2]
+        if not domain:
+            logger.info(" + http_request() error in letsencrypt.sh?")
+            return
 
-    zone_id = _get_zone_id(domain)
-    name = "{0}.{1}".format('_acme-challenge', domain)
-    short_name = '_acme-challenge'
-    if (domain.count('.') > 1):
-        short_name = "{0}.{1}".format('_acme-challenge', domain[0:-(len(_get_zone_name(domain))+1)])
-    record_id = _get_txt_record_id(zone_id, short_name)
+        zone_id = _get_zone_id(domain)
+        name = "{0}.{1}".format('_acme-challenge', domain)
+        short_name = '_acme-challenge'
+        if (domain.count('.') > 1):
+            short_name = "{0}.{1}".format('_acme-challenge', domain[0:-(len(_get_zone_name(domain))+1)])
+        record_id = _get_txt_record_id(zone_id, short_name)
 
-    logger.debug(" + Deleting TXT record name: {0}".format(name))
-    url = DME_API_BASE_URL[DME_SERVER] + "/{0}/records/{1}".format(zone_id, record_id)
-    r = requests.delete(url, headers=DME_HEADERS)
-    r.raise_for_status()
+        logger.debug(" + Deleting TXT record name: {0}".format(name))
+        url = DME_API_BASE_URL[DME_SERVER] + "/{0}/records/{1}".format(zone_id, record_id)
+        r = requests.delete(url, headers=DME_HEADERS)
+        r.raise_for_status()
 
 
 def deploy_cert(args):
